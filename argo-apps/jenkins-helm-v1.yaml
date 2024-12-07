@@ -1,0 +1,35 @@
+# jenkins-helm-v1.yaml
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: jenkins
+  namespace: argocd
+spec:
+  destination:
+    namespace: argocd-applications
+    server: https://kubernetes.default.svc
+  project: default
+  source:
+    chart: jenkins
+    helm:
+      valueFiles:
+      - values.yaml
+      parameters:
+      - name: ingress.hosts[0].host
+        value: argo-jenkins.k8s-3.sa
+      - name: ingress.hosts[0].paths[0].path
+        value: /
+      - name: ingress.hosts[0].paths[0].pathType
+        value: ImplementationSpecific
+    repoURL: https://dmitry-kitsune.github.io/helm-jenkins/
+    targetRevision: 0.1.0
+  syncPolicy:
+    automated:
+      prune: true
+    externalURLs:
+    - http://jenkins.k8s-3.sa/
+    images:
+    - curlimages/curl
+    - jfrog.it-academy.by/public/jenkins-ci:burlyaev29
+    syncOptions:
+    - CreateNamespace=true
