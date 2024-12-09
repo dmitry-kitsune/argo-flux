@@ -33,3 +33,4 @@ spec:
     - jfrog.it-academy.by/public/jenkins-ci:burlyaev29
     syncOptions:
     - CreateNamespace=true
+#test changes

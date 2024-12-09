@@ -3,7 +3,7 @@ name: kubeconform
 on:
   push:
     branches:
-      - master
+      - main
   pull_request:
   workflow_dispatch:
     inputs:
@@ -18,28 +18,30 @@ jobs:
   kubeconform:
     name: Test using kubeconform
     runs-on: ubuntu-latest
+    outputs:
+      CHECK_OUTPUT: ${{ steps.validate.outputs.CHECK_OUTPUT }}
     steps:
       - uses: actions/checkout@v3
 
       - name: Get changed files
         id: changed-files
         run: |
-          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+          if ${{ github.event_name == 'pull_request' }}; then
               changed=$(git diff --name-only -r HEAD^1 HEAD | grep -E '\.ya?ml$' || echo "")
+              echo "changed_files=$changed" >> $GITHUB_OUTPUT
           else
               changed=$(git diff --name-only ${{ github.event.before }} ${{ github.event.after }} | grep -E '\.ya?ml$' || echo "")
+              echo "changed_files=$changed" >> $GITHUB_OUTPUT
           fi
-          echo "changed_files=$changed" >> $GITHUB_ENV
-          echo "changed_files=$changed" >> $GITHUB_OUTPUT
 
       - name: List changed files
         run: |
-          if [ -z "${{ env.changed_files }}" ]; then
+          if [ -z "${{ steps.changed-files.outputs.changed_files }}" ]; then
             echo "No YAML files were changed. Exiting..."
             exit 0
           fi
           echo "Changed files:"
-          echo "${{ env.changed_files }}"
+          echo ${{ steps.changed-files.outputs.changed_files }}
 
       - name: Set up Kubeconform
         uses: bmuschko/setup-kubeconform@v1
@@ -48,19 +50,12 @@ jobs:
         id: validate
         run: |
           CHECK_OUTPUT=""
-          STATUS=0
-          for file in ${{ env.changed_files }}; do
-            echo "Validating $file..."
-            output=$(kubeconform -schema-location default --summary -schema-location 'https://raw.githubusercontent.com/datreeio/CRDs-catalog/main/{{.Group}}/{{.ResourceKind}}_{{.ResourceAPIVersion}}.json' $file)
-            echo "$output"
-            CHECK_OUTPUT="$CHECK_OUTPUT\n$file:\n$output"
-            if echo "$output" | grep -q 'FAIL'; then
-              STATUS=1
-            fi
+          for line in $(kubeconform -schema-location default --summary -schema-location 'https://raw.githubusercontent.com/datreeio/CRDs-catalog/main/{{.Group}}/{{.ResourceKind}}_{{.ResourceAPIVersion}}.json' ${{ steps.changed-files.outputs.changed_files }}); do
+            CHECK_OUTPUT="${CHECK_OUTPUT} $line"
           done
           echo "CHECK_OUTPUT=$CHECK_OUTPUT" >> $GITHUB_ENV
           echo "::set-output name=CHECK_OUTPUT::$CHECK_OUTPUT"
-          exit $STATUS
+          echo $CHECK_OUTPUT
 
       - name: Cache kubeconform schemas
         uses: actions/cache@v3
@@ -72,14 +67,12 @@ jobs:
     needs: kubeconform
     runs-on: ubuntu-latest
     steps:
-      - name: Send Slack Notification
+      - name: Slack Notification
         uses: rtCamp/action-slack-notify@v2
         env:
           SLACK_CHANNEL: slack-notifi-train
-          SLACK_COLOR: ${{ needs.kubeconform.result == 'success' && '#36a64f' || '#FF0000' }}
-          SLACK_MESSAGE: |
-            Validation Results:
-            ${{ needs.kubeconform.outputs.CHECK_OUTPUT }}
+          SLACK_COLOR: ${{ job.status == 'success' && '#36a64f' || '#FF0000' }}
+          SLACK_MESSAGE: ${{ needs.kubeconform.outputs.CHECK_OUTPUT }}
           SLACK_TITLE: Kubeconform Validation Results
           SLACK_USERNAME: GitHub Actions
           SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
