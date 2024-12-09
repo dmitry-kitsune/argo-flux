@@ -53,6 +53,7 @@ jobs:
           for line in $(kubeconform -schema-location default --summary -schema-location 'https://raw.githubusercontent.com/datreeio/CRDs-catalog/main/{{.Group}}/{{.ResourceKind}}_{{.ResourceAPIVersion}}.json' ${{ steps.changed-files.outputs.changed_files }}); do
             CHECK_OUTPUT="${CHECK_OUTPUT} $line"
           done
+          echo "CHECK_OUTPUT=$CHECK_OUTPUT" >> $GITHUB_ENV
           echo "::set-output name=CHECK_OUTPUT::$CHECK_OUTPUT"
           echo $CHECK_OUTPUT
 
@@ -69,7 +70,7 @@ jobs:
       - name: Slack Notification
         uses: rtCamp/action-slack-notify@v2
         env:
-          SLACK_CHANNEL: all-slack
+          SLACK_CHANNEL: slack-notifi-train
           SLACK_COLOR: ${{ job.status == 'success' && '#36a64f' || '#FF0000' }}
           SLACK_MESSAGE: ${{ needs.kubeconform.outputs.CHECK_OUTPUT }}
           SLACK_TITLE: Kubeconform Validation Results
