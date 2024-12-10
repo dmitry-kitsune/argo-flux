@@ -1,4 +1,5 @@
 # jenkins-helm-v1.yaml
+# all good
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
@@ -13,8 +14,8 @@ spec:
     chart: jenkins
     helm:
       valueFiles:
-# сдесь добавлина ошибка      - values.yaml
-#      parameters:
+      - values.yaml
+      parameters:
       - name: ingress.hosts[0].host
         value: argo-jenkins.k8s-3.sa
       - name: ingress.hosts[0].paths[0].path
