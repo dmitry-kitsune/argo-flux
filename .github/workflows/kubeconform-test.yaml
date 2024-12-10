@@ -26,7 +26,7 @@ jobs:
       - name: Get changed files
         id: changed-files
         run: |
-          if ${{ github.event_name == 'pull_request' }}; then
+          if [ "${{ github.event_name }}" == "pull_request" ]; then
               changed=$(git diff --name-only -r HEAD^1 HEAD | grep -E '\.ya?ml$' || echo "")
               echo "changed_files=$changed" >> $GITHUB_OUTPUT
           else
@@ -50,12 +50,50 @@ jobs:
         id: validate
         run: |
           CHECK_OUTPUT=""
-          for line in $(kubeconform -schema-location default --summary -schema-location 'https://raw.githubusercontent.com/datreeio/CRDs-catalog/main/{{.Group}}/{{.ResourceKind}}_{{.ResourceAPIVersion}}.json' ${{ steps.changed-files.outputs.changed_files }}); do
-            CHECK_OUTPUT="${CHECK_OUTPUT} $line"
+          TOTAL_FILES=0
+          VALID_COUNT=0
+          INVALID_COUNT=0
+          ERROR_COUNT=0
+          SKIPPED_COUNT=0
+
+          for file in ${{ steps.changed-files.outputs.changed_files }}; do
+            echo "Validating $file..."
+            TOTAL_FILES=$((TOTAL_FILES + 1))
+            
+            # Запуск kubeconform и сбор результатов
+            output=$(kubeconform -schema-location default --summary -schema-location 'https://raw.githubusercontent.com/datreeio/CRDs-catalog/main/{{.Group}}/{{.ResourceKind}}_{{.ResourceAPIVersion}}.json' $file 2>&1)
+            echo "$output"
+            
+            # Добавляем результаты проверки каждого файла
+            if echo "$output" | grep -q "failed validation"; then
+              CHECK_OUTPUT="$CHECK_OUTPUT\n$file - failed validation:\n$output"
+            else
+              CHECK_OUTPUT="$CHECK_OUTPUT\n$file:\n$output"
+            fi
+            
+            # Извлечение статистики из вывода
+            valid=$(echo "$output" | grep -oP '(?<=Valid: )\d+' || echo 0)
+            invalid=$(echo "$output" | grep -oP '(?<=Invalid: )\d+' || echo 0)
+            errors=$(echo "$output" | grep -oP '(?<=Errors: )\d+' || echo 0)
+            skipped=$(echo "$output" | grep -oP '(?<=Skipped: )\d+' || echo 0)
+
+            VALID_COUNT=$((VALID_COUNT + valid))
+            INVALID_COUNT=$((INVALID_COUNT + invalid))
+            ERROR_COUNT=$((ERROR_COUNT + errors))
+            SKIPPED_COUNT=$((SKIPPED_COUNT + skipped))
           done
+
+          # Итоговый Summary
+          SUMMARY="Summary: $TOTAL_FILES resources found in $TOTAL_FILES files - Valid: $VALID_COUNT, Invalid: $INVALID_COUNT, Errors: $ERROR_COUNT, Skipped: $SKIPPED_COUNT"
+          CHECK_OUTPUT="$CHECK_OUTPUT\n$SUMMARY"
+
           echo "CHECK_OUTPUT=$CHECK_OUTPUT" >> $GITHUB_ENV
           echo "::set-output name=CHECK_OUTPUT::$CHECK_OUTPUT"
-          echo $CHECK_OUTPUT
+
+          # Завершение с ошибкой, если есть Invalid или Errors
+          if [ $INVALID_COUNT -gt 0 ] || [ $ERROR_COUNT -gt 0 ]; then
+            exit 1
+          fi
 
       - name: Cache kubeconform schemas
         uses: actions/cache@v3
@@ -71,9 +109,11 @@ jobs:
         uses: rtCamp/action-slack-notify@v2
         env:
           SLACK_CHANNEL: slack-notifi-train
-          SLACK_COLOR: ${{ job.status == 'success' && '#36a64f' || '#FF0000' }}
-          SLACK_MESSAGE: ${{ needs.kubeconform.outputs.CHECK_OUTPUT }}
-          SLACK_TITLE: Kubeconform Validation Results
+          SLACK_COLOR: ${{ needs.kubeconform.result == 'success' && '#36a64f' || '#FF0000' }}
+          SLACK_MESSAGE: |
+            *Kubeconform Check*:
+            ${{ needs.kubeconform.outputs.CHECK_OUTPUT }}
+          SLACK_TITLE: Kubeconform Check
           SLACK_USERNAME: GitHub Actions
           SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
 
