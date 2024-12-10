@@ -14,7 +14,7 @@ spec:
     chart: jenkins
     helm:
       valueFiles:
-      - values.yaml
+# сдесь добавлина ошибка      - values.yaml
       parameters:
       - name: ingress.hosts[0].host
         value: argo-jenkins.k8s-3.sa
