@@ -67,7 +67,8 @@ jobs:
           fi
 
       - name: Log Validation Summary
-        run: echo "Validation summary: ${{ steps.validate.outputs.VALIDATION_SUMMARY }}"
+        run: |
+	  echo "Validation summary: ${{ steps.validate.outputs.VALIDATION_SUMMARY }}"
 
   notification:
     needs: kubeconform
