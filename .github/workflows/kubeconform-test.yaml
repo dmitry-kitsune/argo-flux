@@ -71,7 +71,7 @@ jobs:
           SLACK_CHANNEL: slack-notifi-train
           SLACK_COLOR: ${{ job.status }}
           SLACK_MESSAGE: ${{ needs.kubeconform.outputs.CHECK_OUTPUT }}
-          SLACK_TITLE: Kubeconform Check
+          SLACK_TITLE: "Kubeconform Validation Results"
           SLACK_USERNAME: GitHub Actions
           SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
 
