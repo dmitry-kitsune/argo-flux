@@ -1,5 +1,5 @@
 # jenkins-helm-v2.yaml
-# good file! SX
+# good file!
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
