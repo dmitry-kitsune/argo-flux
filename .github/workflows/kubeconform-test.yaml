@@ -18,26 +18,42 @@ jobs:
   kubeconform:
     name: Test using kubeconform
     runs-on: ubuntu-latest
+    outputs:
+      CHECK_OUTPUT: ${{ steps.validate.outputs.CHECK_OUTPUT }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v3
+
+      - name: Fetch full repository history
+        run: git fetch --unshallow
 
       - name: Get changed YAML files
         id: changed-files
         run: |
           if [ "${{ github.event_name }}" == "pull_request" ]; then
-              changed=$(git diff --name-only HEAD^1 HEAD | grep -E '\.ya?ml$' || echo "")
+            echo "Pull request detected."
+            changed=$(git diff --name-only HEAD^1 HEAD | grep -E '\.ya?ml$' || echo "")
           else
-              changed=$(git diff --name-only ${{ github.event.before }} ${{ github.event.after }} | grep -E '\.ya?ml$' || echo "")
+            echo "Push event detected."
+            changed=$(git diff --name-only ${{ github.event.before }} ${{ github.event.after }} | grep -E '\.ya?ml$' || echo "")
           fi
-          echo "Changed files:"
+
+          echo "Changed YAML files:"
           echo "$changed"
           echo "changed_files=$changed" >> $GITHUB_ENV
+          echo "::set-output name=changed_files::$changed"
 
       - name: Debug changed files
         run: |
-          echo "Files passed to kubeconform:"
-          echo "${{ env.changed_files }}"
+          echo "Debugging changed files:"
+          echo "Changed files: ${{ env.changed_files }}"
+          for file in ${{ env.changed_files }}; do
+            if [ -f "$file" ]; then
+              echo "File exists: $file"
+            else
+              echo "File not found: $file"
+            fi
+          done
 
       - name: Set up Kubeconform
         uses: bmuschko/setup-kubeconform@v1
@@ -47,7 +63,9 @@ jobs:
         run: |
           if [ -z "${{ env.changed_files }}" ]; then
             echo "No YAML files to validate."
-            echo "CHECK_OUTPUT=Summary: 0 resources found in 0 files - Valid: 0, Invalid: 0, Errors: 0, Skipped: 0" >> $GITHUB_ENV
+            CHECK_OUTPUT="Summary: 0 resources found in 0 files - Valid: 0, Invalid: 0, Errors: 0, Skipped: 0"
+            echo "CHECK_OUTPUT=$CHECK_OUTPUT" >> $GITHUB_ENV
+            echo "::set-output name=CHECK_OUTPUT::$CHECK_OUTPUT"
             exit 0
           fi
 
@@ -99,6 +117,11 @@ jobs:
     needs: kubeconform
     runs-on: ubuntu-latest
     steps:
+      - name: Debug Kubeconform Output
+        run: |
+          echo "Output from validation step:"
+          echo "${{ needs.kubeconform.outputs.CHECK_OUTPUT }}"
+
       - name: Slack Notification
         uses: rtCamp/action-slack-notify@v2
         env:

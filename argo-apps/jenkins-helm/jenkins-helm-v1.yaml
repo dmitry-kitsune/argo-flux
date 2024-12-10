@@ -15,7 +15,7 @@ spec:
     helm:
       valueFiles:
 # сдесь добавлина ошибка      - values.yaml
-      parameters:
+#      parameters:
       - name: ingress.hosts[0].host
         value: argo-jenkins.k8s-3.sa
       - name: ingress.hosts[0].paths[0].path
