@@ -1,4 +1,3 @@
-#  kubeconform-test.yaml
 name: kubeconform
 
 on:
@@ -35,14 +34,14 @@ jobs:
           else
             echo "changed_files=$(git diff --name-only ${{ github.event.before }} ${{ github.event.after }} | xargs)" >> $GITHUB_OUTPUT
           fi
-      
+
       # Display the list of changed files
       - name: List changed files
         run: |
           for file in ${{ steps.changed-files.outputs.changed_files }}; do
             echo "$file was changed"
           done
-      
+
       # Set up Kubeconform for manifest validation
       - name: Set up Kubeconform
         uses: bmuschko/setup-kubeconform@v1
@@ -61,8 +60,8 @@ jobs:
           done
           echo "CHECK_OUTPUT=$CHECK_OUTPUT" >> $GITHUB_ENV  # Set the result as environment variable
           echo $CHECK_OUTPUT  # Output the result to logs
-  
-  # Send Slack notification with validation results         
+
+  # Send Slack notification with validation results
   notification:
     needs: kubeconform
     runs-on: ubuntu-latest
@@ -72,7 +71,9 @@ jobs:
         env:
           SLACK_CHANNEL: slack-notifi-train
           SLACK_COLOR: ${{ job.status }}
-          SLACK_MESSAGE: ${{ needs.kubeconform.outputs.CHECK_OUTPUT }}
+          SLACK_MESSAGE: |
+            Kubeconform Check
+            ${{ needs.kubeconform.outputs.CHECK_OUTPUT }}
           SLACK_TITLE: Kubeconform Check
           SLACK_USERNAME: GitHub Actions
           SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}

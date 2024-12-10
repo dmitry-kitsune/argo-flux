@@ -1,5 +1,5 @@
 # jenkins-helm-v1.yaml
-# error in file
+# no error in file
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
