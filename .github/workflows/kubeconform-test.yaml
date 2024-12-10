@@ -68,7 +68,7 @@ jobs:
 
       - name: Log Validation Summary
         run: |
-	  echo "Validation summary: ${{ steps.validate.outputs.VALIDATION_SUMMARY }}"
+          echo "Validation summary: ${{ steps.validate.outputs.VALIDATION_SUMMARY }}"
 
   notification:
     needs: kubeconform
@@ -83,4 +83,3 @@ jobs:
           SLACK_TITLE: "Kubeconform Validation Results"
           SLACK_USERNAME: GitHub Actions
           SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
-
