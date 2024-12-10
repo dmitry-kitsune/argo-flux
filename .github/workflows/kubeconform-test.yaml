@@ -1,70 +1,80 @@
-name: kubeconform
+name: Kubeconform Validation Workflow
 
 on:
-  push:
-    branches:
-      - main
-  pull_request:
   workflow_dispatch:
+  push:
+    branches-ignore:
+      - develop
+  pull_request:
+    paths:
+      - '**/*.yaml'
+      - '**/*.yml'
 
 permissions:
   contents: read
 
 jobs:
-  kubeconform:
-    name: Test using kubeconform
+  kubeconform-validation:
+    name: Validate Kubernetes Manifests
     runs-on: ubuntu-latest
     outputs:
-      CHECK_OUTPUT: ${{ steps.init.outputs.CHECK_OUTPUT }}
+      CHECK_RESULTS: ${{ steps.validate.outputs.VALIDATION_SUMMARY }}
     steps:
-      - name: Checkout repository
+      - name: Clone Repository
         uses: actions/checkout@v3
         with:
-          fetch-depth: ${{ github.event_name == 'pull_request' && 2 || 0 }}
-      
-      - name: Get changed files
-        id: changed-files
-        run: |
-          if ${{ github.event_name == 'pull_request' }}; then
-              echo "changed_files=$(git diff --name-only -r HEAD^1 HEAD | xargs)" >> $GITHUB_OUTPUT
-          else
-              echo "changed_files=$(git diff --name-only ${{ github.event.before }} ${{ github.event.after }} | xargs)" >> $GITHUB_OUTPUT
-          fi
-      
-      - name: List changed files
-        run: |
-          for file in ${{ steps.changed-files.outputs.changed_files }}; do
-              echo "$file was changed"
-          done
-      
-      - name: Set up Kubeconform
-        uses: bmuschko/setup-kubeconform@v1
-      
-      - name: Validate manifests
-        id: init
-        run: |
-          CHECK_OUTPUT=""
-          for line in $(kubeconform \
-              -schema-location default \
-              --summary \
-              -schema-location 'https://raw.githubusercontent.com/datreeio/CRDs-catalog/main/{{.Group}}/{{.ResourceKind}}_{{.ResourceAPIVersion}}.json' \
-              ${{ steps.changed-files.outputs.changed_files }}); do
-            CHECK_OUTPUT="${CHECK_OUTPUT} $line"
-          done
-          echo "::set-output name=CHECK_OUTPUT::$CHECK_OUTPUT"
-          echo $CHECK_OUTPUT
+          fetch-depth: 0
 
-  notification:
-    needs: kubeconform
+      - name: Identify Modified Files
+        id: find-files
+        run: |
+          CHANGED_FILES=$(git diff --name-only ${{ github.event.before }} ${{ github.event.after }} | grep -E '\.ya?ml$' || echo "")
+          echo "Identified YAML files:"
+          echo "$CHANGED_FILES"
+          echo "changed_files=$CHANGED_FILES" >> $GITHUB_ENV
+
+      - name: Display Modified Files
+        run: echo "The following files will be validated: ${{ env.changed_files }}"
+
+      - name: Setup Kubeconform
+        uses: bmuschko/setup-kubeconform@v1
+        with:
+          version: v0.5.0
+
+      - name: Perform Validation
+        id: validate
+        run: |
+          if [ -z "${{ env.changed_files }}" ]; then
+            echo "No YAML files to validate."
+            VALIDATION_SUMMARY="No resources found."
+            echo "VALIDATION_SUMMARY=$VALIDATION_SUMMARY" >> $GITHUB_ENV
+            echo "::set-output name=VALIDATION_SUMMARY::$VALIDATION_SUMMARY"
+            exit 0
+          fi
+          
+          RESULT=$(kubeconform --schema-location default \
+            --schema-location "https://raw.githubusercontent.com/datreeio/CRDs-catalog/main/{{.Group}}/{{.ResourceKind}}_{{.ResourceAPIVersion}}.json" \
+            --summary ${{ env.changed_files }})
+
+          echo "Validation Results:"
+          echo "$RESULT"
+          echo "VALIDATION_SUMMARY=$RESULT" >> $GITHUB_ENV
+          echo "::set-output name=VALIDATION_SUMMARY::$RESULT"
+
+      - name: Final Output
+        run: echo "Validation summary: ${{ steps.validate.outputs.VALIDATION_SUMMARY }}"
+
+  notify-slack:
+    needs: kubeconform-validation
     runs-on: ubuntu-latest
     steps:
-      - name: Slack Notification
+      - name: Notify Slack Channel
         uses: rtCamp/action-slack-notify@v2
         env:
           SLACK_CHANNEL: slack-notifi-train
-          SLACK_COLOR: ${{ job.status }}
-          SLACK_MESSAGE: ${{ needs.kubeconform.outputs.CHECK_OUTPUT }}
-          SLACK_TITLE: Kubeconform Check
+          SLACK_COLOR: ${{ needs.kubeconform-validation.result == 'success' && 'good' || 'danger' }}
+          SLACK_MESSAGE: "Kubeconform validation completed:\n${{ needs.kubeconform-validation.outputs.CHECK_RESULTS }}"
+          SLACK_TITLE: "Kubeconform Validation Results"
           SLACK_USERNAME: GitHub Actions
           SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
 

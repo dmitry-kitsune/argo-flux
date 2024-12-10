@@ -1,5 +1,4 @@
 # jenkins-helm-v1.yaml
-# test changes in file
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
